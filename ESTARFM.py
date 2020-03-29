@@ -28,122 +28,127 @@ import gdal
 import numpy as np
 from optparse import OptionParser,IndentedHelpFormatter
 
-# Read options
-parser = OptionParser(formatter=IndentedHelpFormatter(max_help_position=200,width=200))
-parser.set_usage('Usage: %prog fine_image_1 coarse_image_1 fine_image_2 coarse_image_2 [options]')
-(opts,args) = parser.parse_args()
-if len(args) < 4:
-    parser.print_help()
-    sys.exit(0)
-FileName1 = args[0]
-FileName2 = args[1]
-FileName3 = args[2]
-FileName4 = args[3]
-
-#-------------------------------------------------------------------
-#                       main program
-#-------------------------------------------------------------------
-
 # ESTARFM
 
 # please set the following parameters
 #----------------------------------------------------------------------
 w = 25.0              # set the haif window size, if 25, the window size is 25*2+1=51 fine pixels
 num_class = 4.0       # set the estimated number of classes, please set a larger value if blending images with very few bands
-DN_min = 0            # set the range of DN value of the image,If byte, 0 and 255
-DN_max = 10000.0
+dn_min = 0            # set the range of DN value of the image,If byte, 0 and 255
+dn_max = 10000.0
 background = -9999    # the value of background and missng pixels in both MODIS and Landsat images
 patch_long = 500      # set the size of each block,if process whole ETM scene, set 500-1000
 temp_file = '/tmp'    # set the temporary file location, temporary files will be deleted after the work
-#------------------------------------------------------------------------
+
+# Read options
+parser = OptionParser(formatter=IndentedHelpFormatter(max_help_position=200,width=200))
+parser.set_usage('Usage: %prog fine_image_1 coarse_image_1 fine_image_2 coarse_image_2 coarse_image_0 [options]')
+(opts,args) = parser.parse_args()
+if len(args) < 5:
+    parser.print_help()
+    sys.exit(0)
+FileName1 = args[0]
+FileName2 = args[1]
+FileName3 = args[2]
+FileName4 = args[3]
+FileName5 = args[4]
+
+#-------------------------------------------------------------------
+#                       main program
+#-------------------------------------------------------------------
 
 # open the fine image of the first pair
-envi_open_file,FileName1,r_fid=fid
-envi_file_query,fid,ns=ns,nl=nl,nb=nb,dims=dims
-map_info = envi_get_map_info(fid=fid)
+#------------------------------------------------------------------------
+ds = gdal.Open(FileName1)
+ns = ds.RasterXSize
+nl = ds.RasterYSize
+nb = ds.RasterCount
+data_f1 = ds.ReadAsArray()
+ds = None
 orig_ns = ns
 orig_nl = nl
 n_ns = int(np.ceil(float(ns)/patch_long)+0.1)
 n_nl = int(np.ceil(float(nl)/patch_long)+0.1)
-
-ind_patch = np.zeros((4,n_ns*n_nl))
+n_sl = n_ns*n_nl
+ind_patch = np.zeros((4,n_sl))
 for i_nl in range(n_nl):
     for i_ns in range(n_ns):
         ind_patch[0,n_ns*i_nl+i_ns] = i_ns*patch_long
         ind_patch[1,n_ns*i_nl+i_ns] = min([ns,(i_ns+1)*patch_long])
         ind_patch[2,n_ns*i_nl+i_ns] = i_nl*patch_long
         ind_patch[3,n_ns*i_nl+i_ns] = min([nl,(i_nl+1)*patch_long])
-
-tempoutname = os.path.join(temp_file,'temp_F1')
-
-pos = np.range(nb)
-for isub in range(n_ns*n_nl):
-    out_name = tempoutname+str(isub+1)
-    dims=[-1,ind_patch[0,isub],ind_patch[1,isub],ind_patch[2,isub],ind_patch[3,isub]]
-    envi_doit, 'resize_doit', fid=fid, pos=pos, dims=dims, interp=0, rfact=[1,1], $
-endfor
+patch_f1 = []
+for isub in range(n_sl):
+    patch_f1.append(data_f1[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
 
 # open the coarse image of the first pair
 #-----------------------------------------------------------
-envi_open_file,FileName2,r_fid=fid
-tempoutname=temp_file+'/temp_C1'
-pos=indgen(nb)
-for isub=0,n_ns*n_nl-1,1 do begin
-  dims=[-1,ind_patch[0,isub],ind_patch[1,isub],ind_patch[2,isub],ind_patch[3,isub]]
-  envi_doit, 'resize_doit', fid=fid, pos=pos, dims=dims, interp=0, rfact=[1,1], $
-  out_name=tempoutname+strtrim(isub+1,1), r_fid=r_fid1
-  envi_file_mng, id=r_fid1, /remove
-endfor
-envi_file_mng, id=fid, /remove
+ds = gdal.Open(FileName2)
+if ds.RasterXSize != ns:
+    raise ValueError('Error, RasterXSize={}, ns={} >>> {}'.format(ds.RasterXsize,ns,FileName2))
+if ds.RasterYSize != nl:
+    raise ValueError('Error, RasterYSize={}, nl={} >>> {}'.format(ds.RasterYsize,nl,FileName2))
+if ds.RasterCount != nb:
+    raise ValueError('Error, RasterCount={}, nb={} >>> {}'.format(ds.RasterCount,nb,FileName2))
+data_c1 = ds.ReadAsArray()
+ds = None
+patch_c1 = []
+for isub in range(n_sl):
+    patch_c1.append(data_c1[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
 
 # open the fine image of the second pair
 #-----------------------------------------------------------
-envi_open_file,FileName3,r_fid=fid
-tempoutname=temp_file+'/temp_F2'
-pos=indgen(nb)
-for isub=0,n_ns*n_nl-1,1 do begin
-  dims=[-1,ind_patch[0,isub],ind_patch[1,isub],ind_patch[2,isub],ind_patch[3,isub]]
-  envi_doit, 'resize_doit', fid=fid, pos=pos, dims=dims, interp=0, rfact=[1,1], $
-  out_name=tempoutname+strtrim(isub+1,1), r_fid=r_fid1
-  envi_file_mng, id=r_fid1, /remove
-endfor
-envi_file_mng, id=fid, /remove
+ds = gdal.Open(FileName3)
+if ds.RasterXSize != ns:
+    raise ValueError('Error, RasterXSize={}, ns={} >>> {}'.format(ds.RasterXsize,ns,FileName3))
+if ds.RasterYSize != nl:
+    raise ValueError('Error, RasterYSize={}, nl={} >>> {}'.format(ds.RasterYsize,nl,FileName3))
+if ds.RasterCount != nb:
+    raise ValueError('Error, RasterCount={}, nb={} >>> {}'.format(ds.RasterCount,nb,FileName3))
+data_f2 = ds.ReadAsArray()
+ds = None
+patch_f2 = []
+for isub in range(n_sl):
+    patch_f2.append(data_f2[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
 
 # open the coarse image of the second pair
 #-----------------------------------------------------------
-envi_open_file,FileName4,r_fid=fid
-tempoutname=temp_file+'/temp_C2'
-pos=indgen(nb)
-for isub=0,n_ns*n_nl-1,1 do begin
-  dims=[-1,ind_patch[0,isub],ind_patch[1,isub],ind_patch[2,isub],ind_patch[3,isub]]
-  envi_doit, 'resize_doit', fid=fid, pos=pos, dims=dims, interp=0, rfact=[1,1], $
-  out_name=tempoutname+strtrim(isub+1,1), r_fid=r_fid1
-  envi_file_mng, id=r_fid1, /remove
-endfor
-envi_file_mng, id=fid, /remove
+ds = gdal.Open(FileName4)
+if ds.RasterXSize != ns:
+    raise ValueError('Error, RasterXSize={}, ns={} >>> {}'.format(ds.RasterXsize,ns,FileName4))
+if ds.RasterYSize != nl:
+    raise ValueError('Error, RasterYSize={}, nl={} >>> {}'.format(ds.RasterYsize,nl,FileName4))
+if ds.RasterCount != nb:
+    raise ValueError('Error, RasterCount={}, nb={} >>> {}'.format(ds.RasterCount,nb,FileName4))
+data_c2 = ds.ReadAsArray()
+ds = None
+patch_c2 = []
+for isub in range(n_sl):
+    patch_c2.append(data_c2[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
 
 # open the coarse image of the prediction time
 #-----------------------------------------------------------
-FileName5 = Dialog_PickFile(title = 'open the coarse image of the prediction time:')
-envi_open_file,FileName5,r_fid=fid
-tempoutname=temp_file+'/temp_C0'
-pos=indgen(nb)
-for isub=0,n_ns*n_nl-1,1 do begin
-  dims=[-1,ind_patch[0,isub],ind_patch[1,isub],ind_patch[2,isub],ind_patch[3,isub]]
-  envi_doit, 'resize_doit', fid=fid, pos=pos, dims=dims, interp=0, rfact=[1,1], $
-  out_name=tempoutname+strtrim(isub+1,1), r_fid=r_fid1
-  envi_file_mng, id=r_fid1, /remove
-endfor
-envi_file_mng, id=fid, /remove
+ds = gdal.Open(FileName5)
+if ds.RasterXSize != ns:
+    raise ValueError('Error, RasterXSize={}, ns={} >>> {}'.format(ds.RasterXsize,ns,FileName5))
+if ds.RasterYSize != nl:
+    raise ValueError('Error, RasterYSize={}, nl={} >>> {}'.format(ds.RasterYsize,nl,FileName5))
+if ds.RasterCount != nb:
+    raise ValueError('Error, RasterCount={}, nb={} >>> {}'.format(ds.RasterCount,nb,FileName5))
+data_c0 = ds.ReadAsArray()
+ds = None
+patch_c0 = []
+for isub in range(n_sl):
+    patch_c0.append(data_c0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
 
 #------------------------------------------------------------------
         #process  each block
 #-------------------------------------------------------------------
 t0 = time.now() # the initial time of program running
 
-print('there are total',n_ns*n_nl,' blocks')
+print('there are total',n_sl,' blocks')
 
-for isub=0,n_ns*n_nl-1,1 do begin
+for isub=0,n_sl-1,1 do begin
 
 # open each block image
 
@@ -179,7 +184,7 @@ for isub=0,n_ns*n_nl-1,1 do begin
       col_index[i,:] = i
     
     # compute the uncertainty,0.2% of each band is uncertain
-    uncertain = (DN_max*0.002)*(2**0.5)
+    uncertain = (dn_max*0.002)*(2**0.5)
 
     similar_th = fltarr(nb,2) # compute the threshold of similar pixel seeking
 
@@ -273,7 +278,7 @@ for isub=0,n_ns*n_nl-1,1 do begin
                   fine_cand=[(fine1[ai:bi,aj:bj,iband])[indcand],(fine2[ai:bi,aj:bj,iband])[indcand]]
                   corse_cand=[(coarse1[ai:bi,aj:bj,iband])[indcand],(coarse2[ai:bi,aj:bj,iband])[indcand]]
                   coarse_change=abs(mean((coarse1[ai:bi,aj:bj,iband])[indcand])-mean((coarse2[ai:bi,aj:bj,iband])[indcand]))         
-                  if ( coarse_change ge DN_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
+                  if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
                         regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
                         sig=1.0-f_pdf(fvalue,1,number_cand*2-2)
                        # correct the result with no significancy or inconsistent change or too large value  
@@ -302,7 +307,7 @@ for isub=0,n_ns*n_nl-1,1 do begin
                      # the final prediction
                      fine0[i,j,iband]=T_weight1*fine01+T_weight2*fine02
                      # revise the abnormal prediction
-                     if (fine0[i,j,iband] le DN_min or fine0[i,j,iband] ge DN_max) then begin
+                     if (fine0[i,j,iband] le dn_min or fine0[i,j,iband] ge dn_max) then begin
                         fine01=total(weight*(fine1[ai:bi,aj:bj,iband])[indcand])
                         fine02=total(weight*(fine2[ai:bi,aj:bj,iband])[indcand])  
                         fine0[i,j,iband]=T_weight1*fine01+T_weight2*fine02
@@ -352,14 +357,14 @@ endfor
 #--------------------------------------------------------------------------------------
 # mosiac all the blended patch
 
-  mfid=intarr(n_ns*n_nl)
-  mdims=intarr(5,n_ns*n_nl)
-  mpos=intarr(nb,n_ns*n_nl)
+  mfid=intarr(n_sl)
+  mdims=intarr(5,n_sl)
+  mpos=intarr(nb,n_sl)
   pos=indgen(nb)
-  x0=intarr(n_ns*n_nl)
-  y0=intarr(n_ns*n_nl)
+  x0=intarr(n_sl)
+  y0=intarr(n_sl)
 
-  for isub=0,n_ns*n_nl-1,1 do begin
+  for isub=0,n_sl-1,1 do begin
       envi_open_file, tempoutname1+strtrim(isub+1,1), r_fid= sub_fid
      if (sub_fid eq -1) then begin
        envi_batch_exit
@@ -377,8 +382,8 @@ endfor
     ysize = orig_nl
     pixel_size = [1.,1.]
 
-    use_see_through = replicate(1L,n_ns*n_nl)
-    see_through_val = replicate(0L,n_ns*n_nl)
+    use_see_through = replicate(1L,n_sl)
+    see_through_val = replicate(0L,n_sl)
 
     out_name=FileName5+'_ESTARFM'
     envi_doit, 'mosaic_doit', fid=mfid, pos=mpos, $
@@ -388,7 +393,7 @@ endfor
     background=0, see_through_val=see_through_val, $
     use_see_through=use_see_through
 
-    for i=0,n_ns*n_nl-1,1 do begin
+    for i=0,n_sl-1,1 do begin
       envi_file_mng, id=mfid[i], /remove, /delete
     endfor
 
