@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #---------------------------------------------------------------------------------
 #                            ESTARFM PROGRAM
 #               Using two pairs of fine and coarse images
@@ -148,52 +149,37 @@ t0 = time.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
-for isub=0,n_sl-1,1 do begin
+for isub in range(n_sl):
 
-# open each block image
+    # open each block image
+    fine1 = data_f1[isub]
+    coarse1 = data_c1[isub]
+    fine2 = data_f2[isub]
+    coarse2 = data_c2[isub]
+    coarse0 = data_c0[isub]
 
-    FileName = temp_file+'/temp_F1'
-    GetData,ImgData=fine1,ns = ns,nl = nl,nb = nb,Data_Type = Data_Type,FileName = FileName+strtrim(isub+1,1),Fid = Fid1
-    fine1=float(fine1)
-
-    FileName = temp_file+'/temp_C1'
-    GetData,ImgData=coarse1,FileName = FileName+strtrim(isub+1,1),Fid = Fid2
-    coarse1=FLOAT(coarse1)
-
-    FileName = temp_file+'/temp_F2'
-    GetData,ImgData=fine2,FileName = FileName+strtrim(isub+1,1),Fid = Fid3
-    fine2=FLOAT(fine2)
-
-    FileName = temp_file+'/temp_C2'
-    GetData,ImgData=coarse2,FileName = FileName+strtrim(isub+1,1),Fid = Fid4
-    coarse2=FLOAT(coarse2)
-
-    FileName = temp_file+'/temp_C0'
-    GetData,ImgData=coarse0,FileName = FileName+strtrim(isub+1,1),Fid = Fid5
-    coarse0=FLOAT(coarse0)
-
-    fine0=fltarr(ns,nl,nb)     #place the blended result
+    fine0 = np.zeros((nb,nl,ns)) # place the blended result
 
     # row index of images
-    row_index=intarr(ns,nl)
+    row_index = np.zeros((nl,ns),dtype=np.intc)
     for i in range(nl):
-      row_index[:,i] = i
+        row_index[i,:] = i
     # column index of images
-    col_index=intarr(ns,nl)
+    col_index = np.zeros((nl,ns),dtype=np.intc)
     for i in range(ns):
-      col_index[i,:] = i
+        col_index[:,i] = i
     
-    # compute the uncertainty,0.2% of each band is uncertain
+    # compute the uncertainty, 0.2% of each band is uncertain
     uncertain = (dn_max*0.002)*(2**0.5)
 
-    similar_th = fltarr(nb,2) # compute the threshold of similar pixel seeking
+    similar_th = fltarr(2,nb) # compute the threshold of similar pixel seeking
 
     for iband in range(nb):
-        similar_th[iband,0] = stddev(fine1[*,*,iband])*2.0/num_class   #pair 1
-        similar_th[iband,1] = stddev(fine2[*,*,iband])*2.0/num_class   #pair 2
+        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/num_class #pair 1
+        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/num_class #pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
-    D_D_all = 1.0+((w-indgen(w*2+1) #(intarr(1,w*2+1)+1))^2+(w-(intarr(w*2+1)+1)#indgen(1,w*2+1))^2)^0.5/float(w)
+    D_D_all = 1.0+((w-indgen(w*2+1)X(intarr(1,w*2+1)+1))^2+(w-(intarr(w*2+1)+1)Xindgen(1,w*2+1))^2)^0.5/float(w)
     
     # find interaction of valid pixels of all input images: exclude missing pixels and background
     valid_index = bytarr(ns,nl)
@@ -224,7 +210,7 @@ for isub=0,n_sl-1,1 do begin
                   0:S_S=abs(fine1[ai:bi,aj:bj,iband]-fine1[i,j,iband])
                   1:S_S=abs(fine2[ai:bi,aj:bj,iband]-fine2[i,j,iband])
                  endcase
-                 ind_cand = where(S_S lt similar_th[iband,ipair])
+                 ind_cand = where(S_S lt similar_th[ipair,iband])
                  cand_band[ind_cand] = 1
                  position_cand = position_cand*cand_band
              endfor
