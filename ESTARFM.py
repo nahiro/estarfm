@@ -26,6 +26,19 @@
 import time
 import gdal
 import numpy as np
+from optparse import OptionParser,IndentedHelpFormatter
+
+# Read options
+parser = OptionParser(formatter=IndentedHelpFormatter(max_help_position=200,width=200))
+parser.set_usage('Usage: %prog fine_image_1 coarse_image_1 fine_image_2 coarse_image_2 [options]')
+(opts,args) = parser.parse_args()
+if len(args) < 4:
+    parser.print_help()
+    sys.exit(0)
+FileName1 = args[0]
+FileName2 = args[1]
+FileName3 = args[2]
+FileName4 = args[3]
 
 #-------------------------------------------------------------------
 #                       main program
@@ -45,7 +58,6 @@ temp_file = '/tmp'    # set the temporary file location, temporary files will be
 #------------------------------------------------------------------------
 
 # open the fine image of the first pair
-FileName1 = Dialog_PickFile(title = 'open the fine image of the first pair:')
 envi_open_file,FileName1,r_fid=fid
 envi_file_query,fid,ns=ns,nl=nl,nb=nb,dims=dims
 map_info = envi_get_map_info(fid=fid)
@@ -73,7 +85,6 @@ endfor
 
 # open the coarse image of the first pair
 #-----------------------------------------------------------
-FileName2 = Dialog_PickFile(title = 'open the coarse image of the first pair:')
 envi_open_file,FileName2,r_fid=fid
 tempoutname=temp_file+'/temp_C1'
 pos=indgen(nb)
@@ -87,7 +98,6 @@ envi_file_mng, id=fid, /remove
 
 # open the fine image of the second pair
 #-----------------------------------------------------------
-FileName3 = Dialog_PickFile(title = 'open the fine image of the second pair:')
 envi_open_file,FileName3,r_fid=fid
 tempoutname=temp_file+'/temp_F2'
 pos=indgen(nb)
@@ -101,7 +111,6 @@ envi_file_mng, id=fid, /remove
 
 # open the coarse image of the second pair
 #-----------------------------------------------------------
-FileName4 = Dialog_PickFile(title = 'open the coarse image of the second pair:')
 envi_open_file,FileName4,r_fid=fid
 tempoutname=temp_file+'/temp_C2'
 pos=indgen(nb)
@@ -162,24 +171,21 @@ for isub=0,n_ns*n_nl-1,1 do begin
 
     # row index of images
     row_index=intarr(ns,nl)
-    for i=0,nl-1,1 do begin
-      row_index[*,i]=i
-    endfor
+    for i in range(nl):
+      row_index[:,i] = i
     # column index of images
     col_index=intarr(ns,nl)
-    for i=0,ns-1,1 do begin
-      col_index[i,*]=i
-    endfor
+    for i in range(ns):
+      col_index[i,:] = i
     
     # compute the uncertainty,0.2% of each band is uncertain
-    uncertain=(DN_max*0.002)*(2^0.5)
+    uncertain = (DN_max*0.002)*(2**0.5)
 
-    similar_th=fltarr(nb,2) # compute the threshold of similar pixel seeking
+    similar_th = fltarr(nb,2) # compute the threshold of similar pixel seeking
 
-    for iband=0,nb-1,1 do begin
-       similar_th[iband,0]=stddev(fine1[*,*,iband])*2.0/num_class   #pair 1
-       similar_th[iband,1]=stddev(fine2[*,*,iband])*2.0/num_class   #pair 2
-    endfor
+    for iband in range(nb):
+        similar_th[iband,0] = stddev(fine1[*,*,iband])*2.0/num_class   #pair 1
+        similar_th[iband,1] = stddev(fine2[*,*,iband])*2.0/num_class   #pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
     D_D_all = 1.0+((w-indgen(w*2+1) #(intarr(1,w*2+1)+1))^2+(w-(intarr(w*2+1)+1)#indgen(1,w*2+1))^2)^0.5/float(w)
@@ -190,10 +196,10 @@ for isub=0,n_ns*n_nl-1,1 do begin
       and coarse2[*,*,0] ne background and coarse0[*,*,0] ne background,num_valid)
     if (num_valid gt 0) then valid_index[ind_valid] = 1 # mark good pixels in all images
      
-    for j=0,nl-1,1 do begin # retieve each target pixel
-        for i=0,ns-1,1 do begin
+    for j in range(nl): # retieve each target pixel
+        for i in range(ns):
        
-        if (valid_index[i,j] eq 1) then begin #do not process the background
+        if (valid_index[i,j] eq 1) then begin # do not process the background
 
           ai = max([0,i-w]) # the window location
           bi = min([ns,i+w])
