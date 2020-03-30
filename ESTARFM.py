@@ -256,12 +256,12 @@ for isub in range(n_sl):
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
                     weight = (1.0/C_D)/np.sum(1.0/C_D)
 
-                    for iband=0,nb-1,1 do begin # compute V
-                        fine_cand=[(fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]]
-                        corse_cand=[(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
-                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-mean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
-                        if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
-                            regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
+                    for iband in range(nb): # compute V
+                        fine_cand = [(fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]]
+                        corse_cand = [(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
+                        coarse_change = abs(np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
+                        if (coarse_change >= dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
+                            regress_result = regress(corse_cand,fine_cand,FTEST=fvalue)
                             sig = 1.0-f_pdf(fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value
                             if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
@@ -274,42 +274,35 @@ for isub in range(n_sl):
                         endelse
 
                         # compute the temporal weight
-                        difc_pair1 = abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
-                        difc_pair2 = abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
+                        difc_pair1 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01**5
+                        difc_pair2 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01**5
                         T_weight1 = (1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
                         T_weight2 = (1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
 
                         # predict from pair1
                         coase0_cand = (coarse0[iband,aj:bj,ai:bi])[cnd_cand]
                         coase1_cand = (coarse1[iband,aj:bj,ai:bi])[cnd_cand]
-                        fine01 = fine1[iband,j,i]+total(weight*V_cand*(coase0_cand-coase1_cand))
+                        fine01 = fine1[iband,j,i]+np.sum(weight*V_cand*(coase0_cand-coase1_cand))
                         # predict from pair2
                         coase2_cand = (coarse2[iband,aj:bj,ai:bi])[cnd_cand]
-                        fine02 = fine2[iband,j,i]+total(weight*V_cand*(coase0_cand-coase2_cand))
+                        fine02 = fine2[iband,j,i]+np.sum(weight*V_cand*(coase0_cand-coase2_cand))
                         # the final prediction
                         fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
                         # revise the abnormal prediction
-                        if (fine0[iband,j,i] le dn_min or fine0[iband,j,i] ge dn_max) then begin
-                                fine01 = total(weight*(fine1[iband,aj:bj,ai:bi])[cnd_cand])
-                                fine02 = total(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])
-                                fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
-                        endif
-                    endfor
-                endif else begin   # for the case of no enough similar pixel selected
-                    for iband=0,nb-1,1 do begin
+                        if (fine0[iband,j,i] <= dn_min) or (fine0[iband,j,i] >= dn_max):
+                            fine01 = np.sum(weight*(fine1[iband,aj:bj,ai:bi])[cnd_cand])
+                            fine02 = np.sum(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])
+                            fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
+                else: # for the case of no enough similar pixel selected
+                    for iband in range(nb):
                         # compute the temporal weight
-                        difc_pair1 = mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
-                        difc_pair1_a = abs(difc_pair1)
-                        difc_pair2 = mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
-                        difc_pair2_a = abs(difc_pair2)
+                        difc_pair1 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01**5
+                        difc_pair1_a = np.abs(difc_pair1)
+                        difc_pair2 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01**5
+                        difc_pair2_a = np.abs(difc_pair2)
                         T_weight1 = (1.0/difc_pair1_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
                         T_weight2 = (1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
                         fine0[iband,j,i] = T_weight1*(fine1[iband,j,i]+difc_pair1)+T_weight2*(fine2[iband,j,i]+difc_pair2)
-                    endfor
-                endelse
-            endif
-        endfor
-    endfor
 
     # change the type of prediction into the type same as the input image
     case Data_Type Of
@@ -323,18 +316,12 @@ for isub in range(n_sl):
         12:fine0 = UINT(fine0)   # unsigned integer vector or array
         13:fine0 = ULONG(fine0)   #  unsigned longword integer vector or array
         14:fine0 = LONG64(fine0)   #a 64-bit integer vector or array
-        15:fine0a = ULONG64(fine0)   #an unsigned 64-bit integer vector or array
+        15:fine0 = ULONG64(fine0)   #an unsigned 64-bit integer vector or array
     EndCase
 
-    print,'finished ',isub+1,' block'
+    print('finished ',isub+1,' block')
     tempoutname1=temp_file+'/temp_blended'
     Envi_Write_Envi_File,fine0,Out_Name = tempoutname1+strtrim(isub+1,1)
-    envi_file_mng, id=Fid1, /remove, /delete
-    envi_file_mng, id=Fid2, /remove, /delete
-    envi_file_mng, id=Fid3, /remove, /delete
-    envi_file_mng, id=Fid4, /remove, /delete
-    envi_file_mng, id=Fid5, /remove, /delete
-endfor
 
 #--------------------------------------------------------------------------------------
 # mosiac all the blended patch
@@ -374,10 +361,6 @@ endfor
     out_dt=Data_Type, pixel_size=pixel_size, $
     background=0, see_through_val=see_through_val, $
     use_see_through=use_see_through
-
-    for i=0,n_sl-1,1 do begin
-      envi_file_mng, id=mfid[i], /remove, /delete
-    endfor
 
 t1 = datetime.now()
 dt = (t1-t0).totalsecond()
