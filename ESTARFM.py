@@ -24,7 +24,7 @@
 #                     Copyright belongs to Xiaolin Zhu
 #---------------------------------------------------------------------------------
 
-import time
+from datetime import datetime
 import gdal
 import numpy as np
 from optparse import OptionParser,IndentedHelpFormatter
@@ -147,7 +147,7 @@ for isub in range(n_sl):
 #------------------------------------------------------------------
         #process  each block
 #-------------------------------------------------------------------
-t0 = time.now() # the initial time of program running
+t0 = datetime.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
@@ -193,6 +193,7 @@ for isub in range(n_sl):
     cnd_valid &= (coarse0[0,:,:] != background_c)
      
     for j in range(nl): # retieve each target pixel
+
         for i in range(ns):
        
             if cnd_valid[j,i]: # do not process the background
@@ -203,39 +204,33 @@ for isub in range(n_sl):
                 bj = min([nl,j+wint])
 
                 cnd_wind_valid = cnd_valid[aj:bj,ai:bi]
-                position_cand = np.ones((bi-ai+1)*(bj-aj+1),dtype=np.intc) # place the location of each similar pixel
+                position_cand = np.full((bi-ai+1)*(bj-aj+1),True) # place the location of each similar pixel
                 row_wind = row_index[aj:bj,ai:bi]
                 col_wind = col_index[aj:bj,ai:bi]
               
                 # searching for similar pixels
-                for ipair=0,1,1 do begin
-                    for iband=0,nb-1,1 do begin
-                        cand_band = intarr((bi-ai+1)*(bj-aj+1))
-                        case ipair of
-                         0:S_S=abs(fine1[iband,aj:bj,ai:bi]-fine1[iband,i,j])
-                         1:S_S=abs(fine2[iband,aj:bj,ai:bi]-fine2[iband,i,j])
-                        endcase
-                        ind_cand = where(S_S lt similar_th[ipair,iband])
-                        cand_band[ind_cand] = 1
-                        position_cand = position_cand*cand_band
-                   endfor
-                endfor
-                cand_band = 0
-                cnd_cand = (position_cand != 0) & cnd_valid[aj:bj,ai:bi]
+                for ipair in range(2):
+                    for iband in range(nb):
+                        if ipair == 0:
+                            S_S = np.abs(fine1[iband,aj:bj,ai:bi]-fine1[iband,j,i])
+                        else:
+                            S_S = np.abs(fine2[iband,aj:bj,ai:bi]-fine2[iband,j,i])
+                        position_cand &= (S_S < similar_th[ipair,iband])
+                cnd_cand = position_cand & cnd_valid[aj:bj,ai:bi]
                 number_cand = cnd_cand.sum()
             
                 if (number_cand > 5):
 
                     S_D_cand = fltarr(number_cand)                #compute the correlation
-                    x_cand = col_wind[indcand]
-                    y_cand = row_wind[indcand]
+                    x_cand = col_wind[cnd_cand]
+                    y_cand = row_wind[cnd_cand]
                     finecand = fltarr(number_cand,nb*2)
                     coasecand = fltarr(number_cand,nb*2)
                     for ib=0,nb-1, 1 do begin
-                        finecand[*,ib] = (fine1[ib,aj:bj,ai:bi])[indcand]
-                        finecand[*,ib+nb] = (fine2[ib,aj:bj,ai:bi])[indcand]
-                        coasecand[*,ib] = (coarse1[ib,aj:bj,ai:bi])[indcand]
-                        coasecand[*,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[indcand]
+                        finecand[*,ib] = (fine1[ib,aj:bj,ai:bi])[cnd_cand]
+                        finecand[*,ib+nb] = (fine2[ib,aj:bj,ai:bi])[cnd_cand]
+                        coasecand[*,ib] = (coarse1[ib,aj:bj,ai:bi])[cnd_cand]
+                        coasecand[*,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[cnd_cand]
                     endfor
                  
                     if (nb eq 1) then begin  # for images with one band, like NDVI
@@ -261,60 +256,60 @@ for isub in range(n_sl):
                     if ((bi-ai+1)*(bj-aj+1) lt (w*2.0+1)*(w*2.0+1)) then begin # not an integrate window
                          D_D_cand = 1.0+((i-x_cand)^2+(j-y_cand)^2)^0.5/float(w)              
                     endif else begin
-                         D_D_cand[0:number_cand-1] = D_D_all[indcand] # integrate window
+                         D_D_cand[0:number_cand-1] = D_D_all[cnd_cand] # integrate window
                     endelse
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
                     weight = (1.0/C_D)/total(1.0/C_D)
 
                     for iband=0,nb-1,1 do begin # compute V
-                        fine_cand=[(fine1[iband,aj:bj,ai:bi])[indcand],(fine2[iband,aj:bj,ai:bi])[indcand]]
-                        corse_cand=[(coarse1[iband,aj:bj,ai:bi])[indcand],(coarse2[iband,aj:bj,ai:bi])[indcand]]
-                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[indcand])-mean((coarse2[iband,aj:bj,ai:bi])[indcand]))         
+                        fine_cand=[(fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]]
+                        corse_cand=[(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
+                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-mean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))         
                         if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
                             regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
-                            sig=1.0-f_pdf(fvalue,1,number_cand*2-2)
+                            sig = 1.0-f_pdf(fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value  
                             if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
-                                V_cand=regress_result[0]
+                                V_cand = regress_result[0]
                             endif else begin
-                                V_cand=1.0
+                                V_cand = 1.0
                             endelse
                         endif else begin
-                            V_cand=1.0
+                            V_cand = 1.0
                         endelse
 
                         # compute the temporal weight
-                        difc_pair1=abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
-                        difc_pair2=abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
-                        T_weight1=(1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
-                        T_weight2=(1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
+                        difc_pair1 = abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
+                        difc_pair2 = abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
+                        T_weight1 = (1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
+                        T_weight2 = (1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
 
                         # predict from pair1
-                        coase0_cand=(coarse0[iband,aj:bj,ai:bi])[indcand]
-                        coase1_cand=(coarse1[iband,aj:bj,ai:bi])[indcand]
-                        fine01=fine1[iband,i,j]+total(weight*V_cand*(coase0_cand-coase1_cand))
+                        coase0_cand = (coarse0[iband,aj:bj,ai:bi])[cnd_cand]
+                        coase1_cand = (coarse1[iband,aj:bj,ai:bi])[cnd_cand]
+                        fine01 = fine1[iband,j,i]+total(weight*V_cand*(coase0_cand-coase1_cand))
                         # predict from pair2
-                        coase2_cand=(coarse2[iband,aj:bj,ai:bi])[indcand]
-                        fine02=fine2[iband,i,j]+total(weight*V_cand*(coase0_cand-coase2_cand))
+                        coase2_cand = (coarse2[iband,aj:bj,ai:bi])[cnd_cand]
+                        fine02 = fine2[iband,j,i]+total(weight*V_cand*(coase0_cand-coase2_cand))
                         # the final prediction
-                        fine0[iband,i,j]=T_weight1*fine01+T_weight2*fine02
+                        fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
                         # revise the abnormal prediction
-                        if (fine0[iband,i,j] le dn_min or fine0[iband,i,j] ge dn_max) then begin
-                                fine01=total(weight*(fine1[iband,aj:bj,ai:bi])[indcand])
-                                fine02=total(weight*(fine2[iband,aj:bj,ai:bi])[indcand])  
-                                fine0[iband,i,j]=T_weight1*fine01+T_weight2*fine02
+                        if (fine0[iband,j,i] le dn_min or fine0[iband,j,i] ge dn_max) then begin
+                                fine01 = total(weight*(fine1[iband,aj:bj,ai:bi])[cnd_cand])
+                                fine02 = total(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])  
+                                fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
                         endif
                     endfor
                 endif else begin   # for the case of no enough similar pixel selected
                     for iband=0,nb-1,1 do begin  
                         # compute the temporal weight
-                        difc_pair1=mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
-                        difc_pair1_a=abs(difc_pair1)
-                        difc_pair2=mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
-                        difc_pair2_a=abs(difc_pair2)
-                        T_weight1=(1.0/difc_pair1_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
-                        T_weight2=(1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
-                        fine0[iband,i,j]=T_weight1*(fine1[iband,i,j]+difc_pair1)+T_weight2*(fine2[iband,i,j]+difc_pair2)
+                        difc_pair1 = mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
+                        difc_pair1_a = abs(difc_pair1)
+                        difc_pair2 = mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
+                        difc_pair2_a = abs(difc_pair2)
+                        T_weight1 = (1.0/difc_pair1_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
+                        T_weight2 = (1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
+                        fine0[iband,j,i] = T_weight1*(fine1[iband,j,i]+difc_pair1)+T_weight2*(fine2[iband,j,i]+difc_pair2)
                     endfor
                 endelse
             endif
@@ -389,4 +384,6 @@ endfor
       envi_file_mng, id=mfid[i], /remove, /delete
     endfor
 
-print('time used:', floor((systime(1)-t0)/3600), 'h',floor(((systime(1)-t0) mod 3600)/60),'m',(systime(1)-t0) mod 60,'s')
+t1 = datetime.now()
+dt = (t1-t0).totalsecond()
+print('time used:', dt//3600,'h',mod(dt,3600)//60,'m',mod(dt,60),'s')
