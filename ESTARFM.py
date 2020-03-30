@@ -33,11 +33,12 @@ from optparse import OptionParser,IndentedHelpFormatter
 
 # please set the following parameters
 #----------------------------------------------------------------------
-w = 25.0              # set the haif window size, if 25, the window size is 25*2+1=51 fine pixels
+hwid = 25.0              # set the haif window size, if 25, the window size is 25*2+1=51 fine pixels
 num_class = 4.0       # set the estimated number of classes, please set a larger value if blending images with very few bands
 dn_min = 0            # set the range of DN value of the image,If byte, 0 and 255
 dn_max = 10000.0
-background = -9999    # the value of background and missng pixels in both MODIS and Landsat images
+background_f = -9999  # the value of background and missng pixels in fine images
+background_c = -9999  # the value of background and missng pixels in coarse images
 patch_long = 500      # set the size of each block,if process whole ETM scene, set 500-1000
 temp_file = '/tmp'    # set the temporary file location, temporary files will be deleted after the work
 
@@ -53,6 +54,7 @@ FileName2 = args[1]
 FileName3 = args[2]
 FileName4 = args[3]
 FileName5 = args[4]
+wint = int(hwid+0.1)
 
 #-------------------------------------------------------------------
 #                       main program
@@ -179,141 +181,145 @@ for isub in range(n_sl):
         similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/num_class #pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
-    D_D_all = 1.0+((w-indgen(w*2+1)X(intarr(1,w*2+1)+1))^2+(w-(intarr(w*2+1)+1)Xindgen(1,w*2+1))^2)^0.5/float(w)
+    a = np.arange(hwid*2.0+1.0).reshape(-1,1)
+    b = np.ones_like(a).T
+    D_D_all = 1.0+np.power(np.square(hwid-np.dot(a,b))+np.square(hwid-np.dot(b.T,a.T)),0.5)/hwid
     
     # find interaction of valid pixels of all input images: exclude missing pixels and background
-    valid_index = bytarr(ns,nl)
-    ind_valid = where(fine1[*,*,0] ne background and fine2[*,*,0] ne background and coarse1[*,*,0] ne background $
-      and coarse2[*,*,0] ne background and coarse0[*,*,0] ne background,num_valid)
-    if (num_valid gt 0) then valid_index[ind_valid] = 1 # mark good pixels in all images
+    cnd_valid = (fine1[0,:,:] != background_f)
+    cnd_valid &= (fine2[0,:,:] != background_f)
+    cnd_valid &= (coarse1[0,:,:] != background_c)
+    cnd_valid &= (coarse2[0,:,:] != background_c)
+    cnd_valid &= (coarse0[0,:,:] != background_c)
      
     for j in range(nl): # retieve each target pixel
         for i in range(ns):
        
-        if (valid_index[i,j] eq 1) then begin # do not process the background
+            if cnd_valid[j,i]: # do not process the background
 
-          ai = max([0,i-w]) # the window location
-          bi = min([ns,i+w])
-          aj = max([0,j-w])
-          bj = min([nl,j+w])
+                ai = max([0,i-wint]) # the window location
+                bi = min([ns,i+wint])
+                aj = max([0,j-wint])
+                bj = min([nl,j+wint])
 
-          ind_wind_valid = where(valid_index[ai:bi,aj:bj] eq 1)
-          position_cand = intarr((bi-ai+1)*(bj-aj+1))+1  #place the location of each similar pixel
-          row_wind = row_index[ai:bi,aj:bj]
-          col_wind = col_index[ai:bi,aj:bj]
-          
-          # searching for similar pixels
-          for ipair=0,1,1 do begin
-             for iband=0,nb-1,1 do begin
-                 cand_band = intarr((bi-ai+1)*(bj-aj+1))
-                 case ipair of
-                  0:S_S=abs(fine1[ai:bi,aj:bj,iband]-fine1[i,j,iband])
-                  1:S_S=abs(fine2[ai:bi,aj:bj,iband]-fine2[i,j,iband])
-                 endcase
-                 ind_cand = where(S_S lt similar_th[ipair,iband])
-                 cand_band[ind_cand] = 1
-                 position_cand = position_cand*cand_band
-             endfor
-          endfor
-          cand_band = 0
-          indcand = where(position_cand ne 0 and valid_index[ai:bi,aj:bj] eq 1,number_cand)
-        
-          if (number_cand gt 5) then begin
+                cnd_wind_valid = cnd_valid[aj:bj,ai:bi]
+                position_cand = np.ones((bi-ai+1)*(bj-aj+1),dtype=np.intc) # place the location of each similar pixel
+                row_wind = row_index[aj:bj,ai:bi]
+                col_wind = col_index[aj:bj,ai:bi]
+              
+                # searching for similar pixels
+                for ipair=0,1,1 do begin
+                    for iband=0,nb-1,1 do begin
+                        cand_band = intarr((bi-ai+1)*(bj-aj+1))
+                        case ipair of
+                         0:S_S=abs(fine1[iband,aj:bj,ai:bi]-fine1[iband,i,j])
+                         1:S_S=abs(fine2[iband,aj:bj,ai:bi]-fine2[iband,i,j])
+                        endcase
+                        ind_cand = where(S_S lt similar_th[ipair,iband])
+                        cand_band[ind_cand] = 1
+                        position_cand = position_cand*cand_band
+                   endfor
+                endfor
+                cand_band = 0
+                cnd_cand = (position_cand != 0) & cnd_valid[aj:bj,ai:bi]
+                number_cand = cnd_cand.sum()
+            
+                if (number_cand > 5):
 
-             S_D_cand = fltarr(number_cand)                #compute the correlation
-             x_cand = col_wind[indcand]
-             y_cand = row_wind[indcand]
-             finecand = fltarr(number_cand,nb*2)
-             coasecand = fltarr(number_cand,nb*2)
-             for ib=0,nb-1, 1 do begin
-               finecand[*,ib] = (fine1[ai:bi,aj:bj,ib])[indcand]
-               finecand[*,ib+nb] = (fine2[ai:bi,aj:bj,ib])[indcand]
-               coasecand[*,ib] = (coarse1[ai:bi,aj:bj,ib])[indcand]
-               coasecand[*,ib+nb] = (coarse2[ai:bi,aj:bj,ib])[indcand]
-             endfor
-             
-             if (nb eq 1) then begin  # for images with one band, like NDVI
-               S_D_cand=1.0-0.5*(abs((finecand[*,0]-coasecand[*,0])/(finecand[*,0]+coasecand[*,0]))+abs((finecand[*,1]-coasecand[*,1])/(finecand[*,1]+coasecand[*,1])))
-             endif else begin   
-              # for images with multiple bands             
-               sdx=stddev(finecand,DIMENSION=2)
-               sdy=stddev(coasecand,DIMENSION=2)         
-               meanx=mean(finecand,DIMENSION=2)
-               meany=mean(coasecand,DIMENSION=2)
-               x_meanx=fltarr(number_cand,nb*2)
-               y_meany=fltarr(number_cand,nb*2)
-               for ib=0,nb*2-1, 1 do begin
-                 x_meanx[*,ib]=finecand[*,ib]-meanx
-                 y_meany[*,ib]=coasecand[*,ib]-meany
-               endfor     
-               S_D_cand=nb*2.0*mean(x_meanx*y_meany,DIMENSION=2)/(sdx*sdy)/(nb*2.0-1) 
-             endelse
-               ind_nan=where(S_D_cand ne S_D_cand,num_nan)
-               if (num_nan gt 0) then S_D_cand[ind_nan]=0.5 # correct the NaN value of correlation
+                    S_D_cand = fltarr(number_cand)                #compute the correlation
+                    x_cand = col_wind[indcand]
+                    y_cand = row_wind[indcand]
+                    finecand = fltarr(number_cand,nb*2)
+                    coasecand = fltarr(number_cand,nb*2)
+                    for ib=0,nb-1, 1 do begin
+                        finecand[*,ib] = (fine1[ib,aj:bj,ai:bi])[indcand]
+                        finecand[*,ib+nb] = (fine2[ib,aj:bj,ai:bi])[indcand]
+                        coasecand[*,ib] = (coarse1[ib,aj:bj,ai:bi])[indcand]
+                        coasecand[*,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[indcand]
+                    endfor
+                 
+                    if (nb eq 1) then begin  # for images with one band, like NDVI
+                        S_D_cand=1.0-0.5*(abs((finecand[*,0]-coasecand[*,0])/(finecand[*,0]+coasecand[*,0]))+abs((finecand[*,1]-coasecand[*,1])/(finecand[*,1]+coasecand[*,1])))
+                    endif else begin   
+                        # for images with multiple bands             
+                        sdx=stddev(finecand,DIMENSION=2)
+                        sdy=stddev(coasecand,DIMENSION=2)         
+                        meanx=mean(finecand,DIMENSION=2)
+                        meany=mean(coasecand,DIMENSION=2)
+                        x_meanx=fltarr(number_cand,nb*2)
+                        y_meany=fltarr(number_cand,nb*2)
+                        for ib=0,nb*2-1, 1 do begin
+                            x_meanx[*,ib]=finecand[*,ib]-meanx
+                            y_meany[*,ib]=coasecand[*,ib]-meany
+                        endfor     
+                        S_D_cand=nb*2.0*mean(x_meanx*y_meany,DIMENSION=2)/(sdx*sdy)/(nb*2.0-1) 
+                    endelse
+                    ind_nan = where(S_D_cand ne S_D_cand,num_nan)
+                    if (num_nan gt 0) then S_D_cand[ind_nan]=0.5 # correct the NaN value of correlation
 
-              D_D_cand = fltarr(number_cand) # spatial distance
-              if ((bi-ai+1)*(bj-aj+1) lt (w*2.0+1)*(w*2.0+1)) then begin # not an integrate window
-                 D_D_cand=1.0+((i-x_cand)^2+(j-y_cand)^2)^0.5/float(w)              
-              endif else begin
-                 D_D_cand[0:number_cand-1]=D_D_all[indcand] # integrate window
-              endelse
-              C_D=(1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
-              weight=(1.0/C_D)/total(1.0/C_D)
+                    D_D_cand = fltarr(number_cand) # spatial distance
+                    if ((bi-ai+1)*(bj-aj+1) lt (w*2.0+1)*(w*2.0+1)) then begin # not an integrate window
+                         D_D_cand = 1.0+((i-x_cand)^2+(j-y_cand)^2)^0.5/float(w)              
+                    endif else begin
+                         D_D_cand[0:number_cand-1] = D_D_all[indcand] # integrate window
+                    endelse
+                    C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
+                    weight = (1.0/C_D)/total(1.0/C_D)
 
-              for iband=0,nb-1,1 do begin # compute V
-                  fine_cand=[(fine1[ai:bi,aj:bj,iband])[indcand],(fine2[ai:bi,aj:bj,iband])[indcand]]
-                  corse_cand=[(coarse1[ai:bi,aj:bj,iband])[indcand],(coarse2[ai:bi,aj:bj,iband])[indcand]]
-                  coarse_change=abs(mean((coarse1[ai:bi,aj:bj,iband])[indcand])-mean((coarse2[ai:bi,aj:bj,iband])[indcand]))         
-                  if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
-                        regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
-                        sig=1.0-f_pdf(fvalue,1,number_cand*2-2)
-                       # correct the result with no significancy or inconsistent change or too large value  
-                        if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
-                             V_cand=regress_result[0]
+                    for iband=0,nb-1,1 do begin # compute V
+                        fine_cand=[(fine1[iband,aj:bj,ai:bi])[indcand],(fine2[iband,aj:bj,ai:bi])[indcand]]
+                        corse_cand=[(coarse1[iband,aj:bj,ai:bi])[indcand],(coarse2[iband,aj:bj,ai:bi])[indcand]]
+                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[indcand])-mean((coarse2[iband,aj:bj,ai:bi])[indcand]))         
+                        if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
+                            regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
+                            sig=1.0-f_pdf(fvalue,1,number_cand*2-2)
+                            # correct the result with no significancy or inconsistent change or too large value  
+                            if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
+                                V_cand=regress_result[0]
+                            endif else begin
+                                V_cand=1.0
+                            endelse
                         endif else begin
-                             V_cand=1.0
+                            V_cand=1.0
                         endelse
-                  endif else begin
-                        V_cand=1.0
-                  endelse
 
-                    # compute the temporal weight
-                     difc_pair1=abs(mean((coarse0[ai:bi,aj:bj,iband])[ind_wind_valid])-mean((coarse1[ai:bi,aj:bj,iband])[ind_wind_valid]))+0.01^5
-                     difc_pair2=abs(mean((coarse0[ai:bi,aj:bj,iband])[ind_wind_valid])-mean((coarse2[ai:bi,aj:bj,iband])[ind_wind_valid]))+0.01^5
-                     T_weight1=(1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
-                     T_weight2=(1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
+                        # compute the temporal weight
+                        difc_pair1=abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
+                        difc_pair2=abs(mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01^5
+                        T_weight1=(1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
+                        T_weight2=(1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
 
-                     # predict from pair1
-                     coase0_cand=(coarse0[ai:bi,aj:bj,iband])[indcand]
-                     coase1_cand=(coarse1[ai:bi,aj:bj,iband])[indcand]
-                     fine01=fine1[i,j,iband]+total(weight*V_cand*(coase0_cand-coase1_cand))
-                     # predict from pair2
-                     coase2_cand=(coarse2[ai:bi,aj:bj,iband])[indcand]
-                     fine02=fine2[i,j,iband]+total(weight*V_cand*(coase0_cand-coase2_cand))
-                     # the final prediction
-                     fine0[i,j,iband]=T_weight1*fine01+T_weight2*fine02
-                     # revise the abnormal prediction
-                     if (fine0[i,j,iband] le dn_min or fine0[i,j,iband] ge dn_max) then begin
-                        fine01=total(weight*(fine1[ai:bi,aj:bj,iband])[indcand])
-                        fine02=total(weight*(fine2[ai:bi,aj:bj,iband])[indcand])  
-                        fine0[i,j,iband]=T_weight1*fine01+T_weight2*fine02
-                     endif
-                  endfor
-               endif else begin   # for the case of no enough similar pixel selected
-                     for iband=0,nb-1,1 do begin  
-                     # compute the temporal weight
-                        difc_pair1=mean((coarse0[ai:bi,aj:bj,iband])[ind_wind_valid])-mean((coarse1[ai:bi,aj:bj,iband])[ind_wind_valid])+0.01^5
+                        # predict from pair1
+                        coase0_cand=(coarse0[iband,aj:bj,ai:bi])[indcand]
+                        coase1_cand=(coarse1[iband,aj:bj,ai:bi])[indcand]
+                        fine01=fine1[iband,i,j]+total(weight*V_cand*(coase0_cand-coase1_cand))
+                        # predict from pair2
+                        coase2_cand=(coarse2[iband,aj:bj,ai:bi])[indcand]
+                        fine02=fine2[iband,i,j]+total(weight*V_cand*(coase0_cand-coase2_cand))
+                        # the final prediction
+                        fine0[iband,i,j]=T_weight1*fine01+T_weight2*fine02
+                        # revise the abnormal prediction
+                        if (fine0[iband,i,j] le dn_min or fine0[iband,i,j] ge dn_max) then begin
+                                fine01=total(weight*(fine1[iband,aj:bj,ai:bi])[indcand])
+                                fine02=total(weight*(fine2[iband,aj:bj,ai:bi])[indcand])  
+                                fine0[iband,i,j]=T_weight1*fine01+T_weight2*fine02
+                        endif
+                    endfor
+                endif else begin   # for the case of no enough similar pixel selected
+                    for iband=0,nb-1,1 do begin  
+                        # compute the temporal weight
+                        difc_pair1=mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
                         difc_pair1_a=abs(difc_pair1)
-                        difc_pair2=mean((coarse0[ai:bi,aj:bj,iband])[ind_wind_valid])-mean((coarse2[ai:bi,aj:bj,iband])[ind_wind_valid])+0.01^5
+                        difc_pair2=mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
                         difc_pair2_a=abs(difc_pair2)
                         T_weight1=(1.0/difc_pair1_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
                         T_weight2=(1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
-                        fine0[i,j,iband]=T_weight1*(fine1[i,j,iband]+difc_pair1)+T_weight2*(fine2[i,j,iband]+difc_pair2)
-                     endfor
-               endelse
-              endif             
-             endfor
-            endfor
+                        fine0[iband,i,j]=T_weight1*(fine1[iband,i,j]+difc_pair1)+T_weight2*(fine2[iband,i,j]+difc_pair2)
+                    endfor
+                endelse
+            endif
+        endfor
+    endfor
 
     # change the type of prediction into the type same as the input image
     case Data_Type Of
@@ -330,14 +336,14 @@ for isub in range(n_sl):
         15:fine0a = ULONG64(fine0)   #an unsigned 64-bit integer vector or array
     EndCase
 
-       print,'finished ',isub+1,' block'
-         tempoutname1=temp_file+'/temp_blended'
-         Envi_Write_Envi_File,fine0,Out_Name = tempoutname1+strtrim(isub+1,1)
-         envi_file_mng, id=Fid1, /remove, /delete
-         envi_file_mng, id=Fid2, /remove, /delete
-         envi_file_mng, id=Fid3, /remove, /delete
-         envi_file_mng, id=Fid4, /remove, /delete
-         envi_file_mng, id=Fid5, /remove, /delete
+    print,'finished ',isub+1,' block'
+    tempoutname1=temp_file+'/temp_blended'
+    Envi_Write_Envi_File,fine0,Out_Name = tempoutname1+strtrim(isub+1,1)
+    envi_file_mng, id=Fid1, /remove, /delete
+    envi_file_mng, id=Fid2, /remove, /delete
+    envi_file_mng, id=Fid3, /remove, /delete
+    envi_file_mng, id=Fid4, /remove, /delete
+    envi_file_mng, id=Fid5, /remove, /delete
 endfor
 
 #--------------------------------------------------------------------------------------
