@@ -6,17 +6,17 @@
 #        Developed by (1) Zhu Xiaolin,email: zhuxiaolin55@gmail.com
 #             Department of Land Surveying and Geo-Informatics
 #             The Hong Kong Polytechnic University
-#             
-#            Debugging history: 
+#
+#            Debugging history:
 #            1)5/12/2012 correct the abnormal prediction
-#            2)9/29/2013 correct the spatial distance calculation for integrate window 
+#            2)9/29/2013 correct the spatial distance calculation for integrate window
 #            3)7/10/2014 correct the abnormal value of spectral distance and use all bands to indentify background
 #            4)2/13/2017 add one parameter to specify the value of pixels of background or missing
 #            5)1/1/2018  improve efficiency and modified the weight for fusing VI index
 #            6)3/11/2008 correct a bug in spatial distance caculation
 #            7)7/27/2018 correct a bug of abnormal coversion coefficent estimation when the two input pairs are too similar
 #            8)7/27/2018 improve the prediction when no enough simular pixels are selected
-#            
+#
 # Please cite the reference: Xiaolin Zhu, Jin Chen, Feng Gao, & Jeffrey G Masek.
 # An enhanced spatial and temporal adaptive reflectance fusion model for complex
 # heterogeneous regions. Remote Sensing of Environment,2010,114,2610-2623
@@ -170,7 +170,7 @@ for isub in range(n_sl):
     col_index = np.zeros((nl,ns),dtype=np.intc)
     for i in range(ns):
         col_index[:,i] = i
-    
+
     # compute the uncertainty, 0.2% of each band is uncertain
     uncertain = (dn_max*0.002)*(2**0.5)
 
@@ -184,18 +184,18 @@ for isub in range(n_sl):
     a = np.arange(hwid*2.0+1.0).reshape(-1,1)
     b = np.ones_like(a).T
     D_D_all = 1.0+np.power(np.square(hwid-np.dot(a,b))+np.square(hwid-np.dot(b.T,a.T)),0.5)/hwid
-    
+
     # find interaction of valid pixels of all input images: exclude missing pixels and background
     cnd_valid = (fine1[0,:,:] != background_f)
     cnd_valid &= (fine2[0,:,:] != background_f)
     cnd_valid &= (coarse1[0,:,:] != background_c)
     cnd_valid &= (coarse2[0,:,:] != background_c)
     cnd_valid &= (coarse0[0,:,:] != background_c)
-     
+
     for j in range(nl): # retieve each target pixel
 
         for i in range(ns):
-       
+
             if cnd_valid[j,i]: # do not process the background
 
                 ai = max([0,i-wint]) # the window location
@@ -207,7 +207,7 @@ for isub in range(n_sl):
                 position_cand = np.full((bi-ai+1)*(bj-aj+1),True) # place the location of each similar pixel
                 row_wind = row_index[aj:bj,ai:bi]
                 col_wind = col_index[aj:bj,ai:bi]
-              
+
                 # searching for similar pixels
                 for ipair in range(2):
                     for iband in range(nb):
@@ -218,57 +218,52 @@ for isub in range(n_sl):
                         position_cand &= (S_S < similar_th[ipair,iband])
                 cnd_cand = position_cand & cnd_valid[aj:bj,ai:bi]
                 number_cand = cnd_cand.sum()
-            
+
                 if (number_cand > 5):
 
-                    S_D_cand = fltarr(number_cand)                #compute the correlation
                     x_cand = col_wind[cnd_cand]
                     y_cand = row_wind[cnd_cand]
-                    finecand = fltarr(number_cand,nb*2)
-                    coasecand = fltarr(number_cand,nb*2)
-                    for ib=0,nb-1, 1 do begin
-                        finecand[*,ib] = (fine1[ib,aj:bj,ai:bi])[cnd_cand]
-                        finecand[*,ib+nb] = (fine2[ib,aj:bj,ai:bi])[cnd_cand]
-                        coasecand[*,ib] = (coarse1[ib,aj:bj,ai:bi])[cnd_cand]
-                        coasecand[*,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[cnd_cand]
-                    endfor
-                 
-                    if (nb eq 1) then begin  # for images with one band, like NDVI
-                        S_D_cand=1.0-0.5*(abs((finecand[*,0]-coasecand[*,0])/(finecand[*,0]+coasecand[*,0]))+abs((finecand[*,1]-coasecand[*,1])/(finecand[*,1]+coasecand[*,1])))
-                    endif else begin   
-                        # for images with multiple bands             
-                        sdx=stddev(finecand,DIMENSION=2)
-                        sdy=stddev(coasecand,DIMENSION=2)         
-                        meanx=mean(finecand,DIMENSION=2)
-                        meany=mean(coasecand,DIMENSION=2)
-                        x_meanx=fltarr(number_cand,nb*2)
-                        y_meany=fltarr(number_cand,nb*2)
-                        for ib=0,nb*2-1, 1 do begin
-                            x_meanx[*,ib]=finecand[*,ib]-meanx
-                            y_meany[*,ib]=coasecand[*,ib]-meany
-                        endfor     
-                        S_D_cand=nb*2.0*mean(x_meanx*y_meany,DIMENSION=2)/(sdx*sdy)/(nb*2.0-1) 
-                    endelse
-                    ind_nan = where(S_D_cand ne S_D_cand,num_nan)
-                    if (num_nan gt 0) then S_D_cand[ind_nan]=0.5 # correct the NaN value of correlation
+                    finecand = np.zeros((number_cand,nb*2))
+                    coasecand = np.zeros((number_cand,nb*2))
+                    for ib in range(nb):
+                        finecand[:,ib] = (fine1[ib,aj:bj,ai:bi])[cnd_cand]
+                        finecand[:,ib+nb] = (fine2[ib,aj:bj,ai:bi])[cnd_cand]
+                        coasecand[:,ib] = (coarse1[ib,aj:bj,ai:bi])[cnd_cand]
+                        coasecand[:,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[cnd_cand]
+
+                    if (nb == 1): # for images with one band, like NDVI
+                        S_D_cand = 1.0-0.5*(abs((finecand[:,0]-coasecand[:,0])/(finecand[:,0]+coasecand[:,0]))+abs((finecand[:,1]-coasecand[:,1])/(finecand[:,1]+coasecand[:,1])))
+                    else:
+                        # for images with multiple bands
+                        sdx = np.nanstd(finecand,axis=1)
+                        sdy = np.nanstd(coasecand,axis=1)
+                        meanx = np.nanmean(finecand,axis=1)
+                        meany = np.nanmean(coasecand,axis=1)
+                        x_meanx = np.zeros((number_cand,nb*2))
+                        y_meany = np.zeros((number_cand,nb*2))
+                        for ib in range(nb*2):
+                            x_meanx[:,ib] = finecand[:,ib]-meanx
+                            y_meany[:,ib] = coasecand[:,ib]-meany
+                        S_D_cand = nb*2.0*np.nanmean(x_meanx*y_meany,axis=1)/(sdx*sdy)/(nb*2.0-1)
+                    cnd_nan = np.isnan(S_D_cand)
+                    S_D_cand[cnd_nan] = 0.5 # correct the NaN value of correlation
 
                     D_D_cand = fltarr(number_cand) # spatial distance
-                    if ((bi-ai+1)*(bj-aj+1) lt (w*2.0+1)*(w*2.0+1)) then begin # not an integrate window
-                         D_D_cand = 1.0+((i-x_cand)^2+(j-y_cand)^2)^0.5/float(w)              
-                    endif else begin
-                         D_D_cand[0:number_cand-1] = D_D_all[cnd_cand] # integrate window
-                    endelse
+                    if ((bi-ai+1)*(bj-aj+1) < (wint*2+1)*(wint*2+1)): # not an integrate window
+                        D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/hwid
+                    else:
+                        D_D_cand[0:number_cand] = D_D_all[cnd_cand] # integrate window
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
-                    weight = (1.0/C_D)/total(1.0/C_D)
+                    weight = (1.0/C_D)/np.sum(1.0/C_D)
 
                     for iband=0,nb-1,1 do begin # compute V
                         fine_cand=[(fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]]
                         corse_cand=[(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
-                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-mean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))         
+                        coarse_change=abs(mean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-mean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         if ( coarse_change ge dn_max*0.02) then begin #to ensure changes in coarse image large enough to obtain the conversion coefficient
                             regress_result=regress(corse_cand,fine_cand,FTEST=fvalue)
                             sig = 1.0-f_pdf(fvalue,1,number_cand*2-2)
-                            # correct the result with no significancy or inconsistent change or too large value  
+                            # correct the result with no significancy or inconsistent change or too large value
                             if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
                                 V_cand = regress_result[0]
                             endif else begin
@@ -296,12 +291,12 @@ for isub in range(n_sl):
                         # revise the abnormal prediction
                         if (fine0[iband,j,i] le dn_min or fine0[iband,j,i] ge dn_max) then begin
                                 fine01 = total(weight*(fine1[iband,aj:bj,ai:bi])[cnd_cand])
-                                fine02 = total(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])  
+                                fine02 = total(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])
                                 fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
                         endif
                     endfor
                 endif else begin   # for the case of no enough similar pixel selected
-                    for iband=0,nb-1,1 do begin  
+                    for iband=0,nb-1,1 do begin
                         # compute the temporal weight
                         difc_pair1 = mean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-mean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01^5
                         difc_pair1_a = abs(difc_pair1)
