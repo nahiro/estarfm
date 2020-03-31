@@ -71,6 +71,7 @@ data_f1 = ds.ReadAsArray()
 ds = None
 orig_ns = ns
 orig_nl = nl
+orig_nb = nb
 fine_dtype = data_f1.dtype
 n_ns = int(np.ceil(float(ns)/patch_long)+0.1)
 n_nl = int(np.ceil(float(nl)/patch_long)+0.1)
@@ -315,6 +316,16 @@ for isub in range(n_sl):
     print('finished ',isub+1,' block')
 
 #--------------------------------------------------------------------------------------
+# Output result
+driver = gdal.GetDriverByName("GTiff")
+ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_nl,orig_ns,orig_nb,gdal.GDT_Float32)
+ds.SetGeoTransform(fine_Trans) # sets same geotransform as input
+ds.SetProjection(fine_proj) # sets same projection as input
+ds.GetRasterBand(1).WriteArray(mosic_f0)
+ds.GetRasterBand(1).SetNoDataValue(np.nan) # if you want these values transparent
+ds.FlushCache() # saves to disk
+ds = None
+
 t1 = datetime.now()
 dt = (t1-t0).totalsecond()
 print('time used:', dt//3600,'h',mod(dt,3600)//60,'m',mod(dt,60),'s')
