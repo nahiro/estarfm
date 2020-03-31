@@ -153,7 +153,7 @@ t0 = datetime.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
-mosic_f0 = np.zeros((nb,nl,ns),dtype=fine_dtype)
+mosic_f0 = np.full((nb,nl,ns),background_f,dtype=fine_dtype)
 
 for isub in range(n_sl):
 
@@ -163,6 +163,7 @@ for isub in range(n_sl):
     fine2 = patch_f2[isub]
     coarse2 = patch_c2[isub]
     coarse0 = patch_c0[isub]
+
     nb,nl,ns = fine1.shape
 
     fine0 = np.zeros((nb,nl,ns)) # place the blended result
