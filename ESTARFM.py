@@ -27,6 +27,7 @@
 from datetime import datetime
 import gdal
 import numpy as np
+import statsmodels.api as sm
 from optparse import OptionParser,IndentedHelpFormatter
 
 # ESTARFM
@@ -151,14 +152,17 @@ t0 = datetime.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
+mosic_f0 = np.zeros((nb,nl,ns))
+
 for isub in range(n_sl):
 
     # open each block image
-    fine1 = data_f1[isub]
-    coarse1 = data_c1[isub]
-    fine2 = data_f2[isub]
-    coarse2 = data_c2[isub]
-    coarse0 = data_c0[isub]
+    fine1 = patch_f1[isub]
+    coarse1 = patch_c1[isub]
+    fine2 = patch_f2[isub]
+    coarse2 = patch_c2[isub]
+    coarse0 = patch_c0[isub]
+    nb,nl,ns = fine1.shape
 
     fine0 = np.zeros((nb,nl,ns)) # place the blended result
 
@@ -319,49 +323,11 @@ for isub in range(n_sl):
         15:fine0 = ULONG64(fine0)   #an unsigned 64-bit integer vector or array
     EndCase
 
+    # mosiac the blended patch
+    mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0
     print('finished ',isub+1,' block')
-    tempoutname1=temp_file+'/temp_blended'
-    Envi_Write_Envi_File,fine0,Out_Name = tempoutname1+strtrim(isub+1,1)
 
 #--------------------------------------------------------------------------------------
-# mosiac all the blended patch
-
-  mfid=intarr(n_sl)
-  mdims=intarr(5,n_sl)
-  mpos=intarr(nb,n_sl)
-  pos=indgen(nb)
-  x0=intarr(n_sl)
-  y0=intarr(n_sl)
-
-  for isub=0,n_sl-1,1 do begin
-      envi_open_file, tempoutname1+strtrim(isub+1,1), r_fid= sub_fid
-     if (sub_fid eq -1) then begin
-       envi_batch_exit
-       return
-     endif
-      envi_file_query,  sub_fid, ns=sub_ns, nl=sub_nl
-      mfid[isub] = sub_fid
-      mpos[*,isub] = indgen(nb)
-      mdims[*,isub] = [-1,0, sub_ns-1,0, sub_nl-1]
-      x0[isub]=ind_patch[0,isub]
-      y0[isub]=ind_patch[2,isub]
-  endfor
-
-    xsize = orig_ns
-    ysize = orig_nl
-    pixel_size = [1.,1.]
-
-    use_see_through = replicate(1L,n_sl)
-    see_through_val = replicate(0L,n_sl)
-
-    out_name=FileName5+'_ESTARFM'
-    envi_doit, 'mosaic_doit', fid=mfid, pos=mpos, $
-    dims=mdims, out_name=out_name, xsize=xsize, $
-    ysize=ysize, x0=x0, y0=y0, georef=0,MAP_INFO=map_info, $
-    out_dt=Data_Type, pixel_size=pixel_size, $
-    background=0, see_through_val=see_through_val, $
-    use_see_through=use_see_through
-
 t1 = datetime.now()
 dt = (t1-t0).totalsecond()
 print('time used:', dt//3600,'h',mod(dt,3600)//60,'m',mod(dt,60),'s')
