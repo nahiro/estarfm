@@ -318,11 +318,13 @@ for isub in range(n_sl):
 #--------------------------------------------------------------------------------------
 # Output result
 driver = gdal.GetDriverByName("GTiff")
-ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_nl,orig_ns,orig_nb,gdal.GDT_Float32)
+ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_ns,orig_nl,orig_nb,gdal.GDT_Float32)
 ds.SetGeoTransform(fine_Trans) # sets same geotransform as input
 ds.SetProjection(fine_proj) # sets same projection as input
-ds.GetRasterBand(1).WriteArray(mosic_f0)
-ds.GetRasterBand(1).SetNoDataValue(np.nan) # if you want these values transparent
+for iband in range(nb):
+    band = ds.GetRasterBand(iband+1)
+    band.WriteArray(mosic_f0[iband])
+band.SetNoDataValue(np.nan) # if you want these values transparent
 ds.FlushCache() # saves to disk
 ds = None
 
