@@ -71,6 +71,7 @@ data_f1 = ds.ReadAsArray()
 ds = None
 orig_ns = ns
 orig_nl = nl
+fine_dtype = data_f1.dtype
 n_ns = int(np.ceil(float(ns)/patch_long)+0.1)
 n_nl = int(np.ceil(float(nl)/patch_long)+0.1)
 n_sl = n_ns*n_nl
@@ -152,7 +153,7 @@ t0 = datetime.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
-mosic_f0 = np.zeros((nb,nl,ns))
+mosic_f0 = np.zeros((nb,nl,ns),dtype=fine_dtype)
 
 for isub in range(n_sl):
 
@@ -324,7 +325,7 @@ for isub in range(n_sl):
     EndCase
 
     # mosiac the blended patch
-    mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0
+    mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0.astype(fine_dtype)
     print('finished ',isub+1,' block')
 
 #--------------------------------------------------------------------------------------
