@@ -309,23 +309,8 @@ for isub in range(n_sl):
                         T_weight2 = (1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
                         fine0[iband,j,i] = T_weight1*(fine1[iband,j,i]+difc_pair1)+T_weight2*(fine2[iband,j,i]+difc_pair2)
 
-    # change the type of prediction into the type same as the input image
-    case Data_Type Of
-        1:fine0 = Byte(fine0)    #  BYTE  Byte
-        2:fine0 = FIX(fine0)     #  INT  Integer
-        3:fine0 = LONG(fine0)    #  LONG  Longword integer
-        4:fine0 = FLOAT(fine0)   #  FLOAT  Floating point
-        5:fine0 = DOUBLE(fine0)  #  DOUBLE  Double-precision floating
-        6:fine0 = COMPLEX(fine0)# complex, single-precision, floating-point
-        9:fine0 = DCOMPLEX(fine0)#complex, double-precision, floating-point
-        12:fine0 = UINT(fine0)   # unsigned integer vector or array
-        13:fine0 = ULONG(fine0)   #  unsigned longword integer vector or array
-        14:fine0 = LONG64(fine0)   #a 64-bit integer vector or array
-        15:fine0 = ULONG64(fine0)   #an unsigned 64-bit integer vector or array
-    EndCase
-
     # mosiac the blended patch
-    mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0.astype(fine_dtype)
+    mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0.astype(fine_dtype) # change the type of prediction into the type same as the input image
     print('finished ',isub+1,' block')
 
 #--------------------------------------------------------------------------------------
