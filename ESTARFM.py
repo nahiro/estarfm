@@ -27,6 +27,7 @@
 from datetime import datetime
 import gdal
 import numpy as np
+import scipy.stats as stats
 import statsmodels.api as sm
 from optparse import OptionParser,IndentedHelpFormatter
 
@@ -76,7 +77,7 @@ fine_dtype = data_f1.dtype
 n_ns = int(np.ceil(float(ns)/patch_long)+0.1)
 n_nl = int(np.ceil(float(nl)/patch_long)+0.1)
 n_sl = n_ns*n_nl
-ind_patch = np.zeros((4,n_sl))
+ind_patch = np.zeros((4,n_sl),dtype=np.intc)
 for i_nl in range(n_nl):
     for i_ns in range(n_ns):
         ind_patch[0,n_ns*i_nl+i_ns] = i_ns*patch_long
@@ -181,7 +182,7 @@ for isub in range(n_sl):
     # compute the uncertainty, 0.2% of each band is uncertain
     uncertain = (dn_max*0.002)*(2**0.5)
 
-    similar_th = fltarr(2,nb) # compute the threshold of similar pixel seeking
+    similar_th = np.zeros((2,nb)) # compute the threshold of similar pixel seeking
 
     for iband in range(nb):
         similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/num_class #pair 1
@@ -206,12 +207,12 @@ for isub in range(n_sl):
             if cnd_valid[j,i]: # do not process the background
 
                 ai = max([0,i-wint]) # the window location
-                bi = min([ns,i+wint])
+                bi = min([ns,i+wint+1])
                 aj = max([0,j-wint])
-                bj = min([nl,j+wint])
+                bj = min([nl,j+wint+1])
 
                 cnd_wind_valid = cnd_valid[aj:bj,ai:bi]
-                position_cand = np.full((bi-ai+1)*(bj-aj+1),True) # place the location of each similar pixel
+                position_cand = np.full_like(cnd_wind_valid,True) # place the location of each similar pixel
                 row_wind = row_index[aj:bj,ai:bi]
                 col_wind = col_index[aj:bj,ai:bi]
 
@@ -239,7 +240,7 @@ for isub in range(n_sl):
                         coasecand[:,ib+nb] = (coarse2[ib,aj:bj,ai:bi])[cnd_cand]
 
                     if (nb == 1): # for images with one band, like NDVI
-                        S_D_cand = 1.0-0.5*(abs((finecand[:,0]-coasecand[:,0])/(finecand[:,0]+coasecand[:,0]))+abs((finecand[:,1]-coasecand[:,1])/(finecand[:,1]+coasecand[:,1])))
+                        S_D_cand = 1.0-0.5*(abs((finecand[:,0]-coasecand[:,0])/(finecand[:,0]+coasecand[:,0]))+abs((finecand[:,1]-coasecand[:,1])/(finecand[:,1]+coasecand[:,1]))) # compute the correlation
                     else:
                         # for images with multiple bands
                         sdx = np.nanstd(finecand,axis=1)
@@ -255,9 +256,8 @@ for isub in range(n_sl):
                     cnd_nan = np.isnan(S_D_cand)
                     S_D_cand[cnd_nan] = 0.5 # correct the NaN value of correlation
 
-                    D_D_cand = fltarr(number_cand) # spatial distance
-                    if ((bi-ai+1)*(bj-aj+1) < (wint*2+1)*(wint*2+1)): # not an integrate window
-                        D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/hwid
+                    if ((bi-ai)*(bj-aj) < (wint*2+1)*(wint*2+1)): # not an integrate window
+                        D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/hwid # spatial distance
                     else:
                         D_D_cand[0:number_cand] = D_D_all[cnd_cand] # integrate window
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
@@ -279,8 +279,8 @@ for isub in range(n_sl):
                             V_cand = 1.0
 
                         # compute the temporal weight
-                        difc_pair1 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01**5
-                        difc_pair2 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01**5
+                        difc_pair1 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[cnd_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_wind_valid]))+0.01**5
+                        difc_pair2 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[cnd_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_wind_valid]))+0.01**5
                         T_weight1 = (1.0/difc_pair1)/(1.0/difc_pair1+1.0/difc_pair2)
                         T_weight2 = (1.0/difc_pair2)/(1.0/difc_pair1+1.0/difc_pair2)
 
@@ -301,9 +301,9 @@ for isub in range(n_sl):
                 else: # for the case of no enough similar pixel selected
                     for iband in range(nb):
                         # compute the temporal weight
-                        difc_pair1 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01**5
+                        difc_pair1 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[cnd_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_wind_valid])+0.01**5
                         difc_pair1_a = np.abs(difc_pair1)
-                        difc_pair2 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[ind_wind_valid])+0.01**5
+                        difc_pair2 = np.nanmean((coarse0[iband,aj:bj,ai:bi])[cnd_wind_valid])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_wind_valid])+0.01**5
                         difc_pair2_a = np.abs(difc_pair2)
                         T_weight1 = (1.0/difc_pair1_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
                         T_weight2 = (1.0/difc_pair2_a)/(1.0/difc_pair1_a+1.0/difc_pair2_a)
