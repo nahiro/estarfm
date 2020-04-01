@@ -70,6 +70,8 @@ ns = ds.RasterXSize
 nl = ds.RasterYSize
 nb = ds.RasterCount
 data_f1 = ds.ReadAsArray()
+fine_trans = ds.GetGeoTransform()
+fine_proj = ds.GetProjection()
 ds = None
 orig_ns = ns
 orig_nl = nl
@@ -317,8 +319,8 @@ for isub in range(n_sl):
 #--------------------------------------------------------------------------------------
 # Output result
 driver = gdal.GetDriverByName("GTiff")
-ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_ns,orig_nl,orig_nb,gdal.GDT_Float32)
-ds.SetGeoTransform(fine_Trans) # sets same geotransform as input
+ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_ns,orig_nl,orig_nb,gdal.GDT_Int16)
+ds.SetGeoTransform(fine_trans) # sets same geotransform as input
 ds.SetProjection(fine_proj) # sets same projection as input
 for iband in range(nb):
     band = ds.GetRasterBand(iband+1)
@@ -328,5 +330,5 @@ ds.FlushCache() # saves to disk
 ds = None
 
 t1 = datetime.now()
-dt = (t1-t0).totalsecond()
-print('time used:', dt//3600,'h',mod(dt,3600)//60,'m',mod(dt,60),'s')
+dt = (t1-t0).total_seconds()
+print('time used:', dt//3600,'h',np.mod(dt,3600)//60,'m',np.mod(dt,60),'s')
