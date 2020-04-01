@@ -24,6 +24,7 @@
 #                     Copyright belongs to Xiaolin Zhu
 #---------------------------------------------------------------------------------
 
+import os
 from datetime import datetime
 import gdal
 import numpy as np
@@ -259,16 +260,16 @@ for isub in range(n_sl):
                     if ((bi-ai)*(bj-aj) < (wint*2+1)*(wint*2+1)): # not an integrate window
                         D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/hwid # spatial distance
                     else:
-                        D_D_cand[0:number_cand] = D_D_all[cnd_cand] # integrate window
+                        D_D_cand = D_D_all[cnd_cand] # integrate window
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
                     weight = (1.0/C_D)/np.sum(1.0/C_D)
 
                     for iband in range(nb): # compute V
-                        fine_cand = [(fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]]
-                        corse_cand = [(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
+                        fine_cand = np.hstack(((fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]))
+                        coarse_cand = np.hstack(((coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         coarse_change = abs(np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         if (coarse_change >= dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
-                            regress_result = sm.OLS(corse_cand,sm.add_constant(fine_cand)).fit()
+                            regress_result = sm.OLS(fine_cand,sm.add_constant(coarse_cand)).fit()
                             sig = 1.0-stats.f.pdf(regress_result.fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value
                             if (sig <= 0.05) and (regress_result.params[1] > 0) and (regress_result.params[1] <= 5):
