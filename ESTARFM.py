@@ -268,17 +268,15 @@ for isub in range(n_sl):
                         corse_cand = [(coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]]
                         coarse_change = abs(np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         if (coarse_change >= dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
-                            regress_result = regress(corse_cand,fine_cand,FTEST=fvalue)
-                            sig = 1.0-f_pdf(fvalue,1,number_cand*2-2)
+                            regress_result = sm.OLS(corse_cand,sm.add_constant(fine_cand)).fit()
+                            sig = 1.0-stats.f.pdf(regress_result.fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value
-                            if (sig le 0.05 and regress_result[0] gt 0 and regress_result[0] le 5) then begin
-                                V_cand = regress_result[0]
-                            endif else begin
+                            if (sig <= 0.05) and (regress_result.params[1] > 0) and (regress_result.params[1] <= 5):
+                                V_cand = regress_result.params[1]
+                            else:
                                 V_cand = 1.0
-                            endelse
-                        endif else begin
+                        else:
                             V_cand = 1.0
-                        endelse
 
                         # compute the temporal weight
                         difc_pair1 = np.abs(np.nanmean((coarse0[iband,aj:bj,ai:bi])[ind_wind_valid])-np.nanmean((coarse1[iband,aj:bj,ai:bi])[ind_wind_valid]))+0.01**5
