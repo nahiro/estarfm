@@ -36,18 +36,24 @@ from optparse import OptionParser,IndentedHelpFormatter
 
 # please set the following parameters
 #----------------------------------------------------------------------
-hwid = 25.0              # set the haif window size, if 25, the window size is 25*2+1=51 fine pixels
-num_class = 4.0       # set the estimated number of classes, please set a larger value if blending images with very few bands
-dn_min = 0            # set the range of DN value of the image,If byte, 0 and 255
-dn_max = 10000.0
-background_f = -9999  # the value of background and missng pixels in fine images
-background_c = -9999  # the value of background and missng pixels in coarse images
-patch_long = 500      # set the size of each block,if process whole ETM scene, set 500-1000
-temp_file = '/tmp'    # set the temporary file location, temporary files will be deleted after the work
+HWID = 25.0           # set the haif window size, if 25, the window size is 25*2+1=51 fine pixels
+NUM_CLASS = 4.0       # set the estimated number of classes, please set a larger value if blending images with very few bands
+DN_MIN = 0            # set the range of DN value of the image, If byte, 0 and 255
+DN_MAX = 10000.0      # set the range of DN value of the image, If byte, 0 and 255
+BACKGROUND_F = -9999  # the value of background and missng pixels in fine images
+BACKGROUND_C = -9999  # the value of background and missng pixels in coarse images
+PATCH_LONG = 500      # set the size of each block,if process whole ETM scene, set 500-1000
 
 # Read options
 parser = OptionParser(formatter=IndentedHelpFormatter(max_help_position=200,width=200))
 parser.set_usage('Usage: %prog fine_image_1 coarse_image_1 fine_image_2 coarse_image_2 coarse_image_0 [options]')
+parser.add_option('-w','--hwid',default=HWID,type='float',help='set the haif window size, if 25, the window size is 25*2+1=51 fine pixels (%default)')
+parser.add_option('-c','--num_class',default=NUM_CLASS,type='float',help='set the estimated number of classes, please set a larger value if blending images with very few bands (%default)')
+parser.add_option('-m','--dn_min',default=DN_MIN,type='float',help='set the range of DN value of the image, If byte, 0 (%default)')
+parser.add_option('-M','--dn_max',default=DN_MAX,type='float',help='set the range of DN value of the image, If byte, 255 (%default)')
+parser.add_option('-b','--background_f',default=BACKGROUND_F,type='float',help='the value of background and missng pixels in fine images (%default)')
+parser.add_option('-B','--background_c',default=BACKGROUND_C,type='float',help='the value of background and missng pixels in coarse images (%default)')
+parser.add_option('-p','--patch_long',default=PATCH_LONG,type='int',help='set the size of each block,if process whole ETM scene, set 500-1000 (%default)')
 (opts,args) = parser.parse_args()
 if len(args) < 5:
     parser.print_help()
@@ -57,7 +63,7 @@ FileName2 = args[1]
 FileName3 = args[2]
 FileName4 = args[3]
 FileName5 = args[4]
-wint = int(hwid+0.1)
+wint = int(opts.hwid+0.1)
 
 #-------------------------------------------------------------------
 #                       main program
@@ -77,16 +83,16 @@ orig_ns = ns
 orig_nl = nl
 orig_nb = nb
 fine_dtype = data_f1.dtype
-n_ns = int(np.ceil(float(ns)/patch_long)+0.1)
-n_nl = int(np.ceil(float(nl)/patch_long)+0.1)
+n_ns = int(np.ceil(float(ns)/opts.patch_long)+0.1)
+n_nl = int(np.ceil(float(nl)/opts.patch_long)+0.1)
 n_sl = n_ns*n_nl
 ind_patch = np.zeros((4,n_sl),dtype=np.intc)
 for i_nl in range(n_nl):
     for i_ns in range(n_ns):
-        ind_patch[0,n_ns*i_nl+i_ns] = i_ns*patch_long
-        ind_patch[1,n_ns*i_nl+i_ns] = min([ns,(i_ns+1)*patch_long])
-        ind_patch[2,n_ns*i_nl+i_ns] = i_nl*patch_long
-        ind_patch[3,n_ns*i_nl+i_ns] = min([nl,(i_nl+1)*patch_long])
+        ind_patch[0,n_ns*i_nl+i_ns] = i_ns*opts.patch_long
+        ind_patch[1,n_ns*i_nl+i_ns] = min([ns,(i_ns+1)*opts.patch_long])
+        ind_patch[2,n_ns*i_nl+i_ns] = i_nl*opts.patch_long
+        ind_patch[3,n_ns*i_nl+i_ns] = min([nl,(i_nl+1)*opts.patch_long])
 patch_f1 = []
 for isub in range(n_sl):
     patch_f1.append(data_f1[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]])
@@ -158,7 +164,7 @@ t0 = datetime.now() # the initial time of program running
 
 print('there are total',n_sl,' blocks')
 
-mosic_f0 = np.full((nb,nl,ns),background_f,dtype=fine_dtype)
+mosic_f0 = np.full((nb,nl,ns),opts.background_f,dtype=fine_dtype)
 
 for isub in range(n_sl):
 
@@ -183,25 +189,25 @@ for isub in range(n_sl):
         col_index[:,i] = i
 
     # compute the uncertainty, 0.2% of each band is uncertain
-    uncertain = (dn_max*0.002)*(2**0.5)
+    uncertain = (opts.dn_max*0.002)*(2**0.5)
 
     similar_th = np.zeros((2,nb)) # compute the threshold of similar pixel seeking
 
     for iband in range(nb):
-        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/num_class #pair 1
-        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/num_class #pair 2
+        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/opts.num_class #pair 1
+        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/opts.num_class #pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
-    a = np.arange(hwid*2.0+1.0).reshape(-1,1)
+    a = np.arange(opts.hwid*2.0+1.0).reshape(-1,1)
     b = np.ones_like(a).T
-    D_D_all = 1.0+np.power(np.square(hwid-np.dot(a,b))+np.square(hwid-np.dot(b.T,a.T)),0.5)/hwid
+    D_D_all = 1.0+np.power(np.square(opts.hwid-np.dot(a,b))+np.square(opts.hwid-np.dot(b.T,a.T)),0.5)/opts.hwid
 
     # find interaction of valid pixels of all input images: exclude missing pixels and background
-    cnd_valid = (fine1[0,:,:] != background_f)
-    cnd_valid &= (fine2[0,:,:] != background_f)
-    cnd_valid &= (coarse1[0,:,:] != background_c)
-    cnd_valid &= (coarse2[0,:,:] != background_c)
-    cnd_valid &= (coarse0[0,:,:] != background_c)
+    cnd_valid = (fine1[0,:,:] != opts.background_f)
+    cnd_valid &= (fine2[0,:,:] != opts.background_f)
+    cnd_valid &= (coarse1[0,:,:] != opts.background_c)
+    cnd_valid &= (coarse2[0,:,:] != opts.background_c)
+    cnd_valid &= (coarse0[0,:,:] != opts.background_c)
 
     for j in range(nl): # retieve each target pixel
 
@@ -260,7 +266,7 @@ for isub in range(n_sl):
                     S_D_cand[cnd_nan] = 0.5 # correct the NaN value of correlation
 
                     if ((bi-ai)*(bj-aj) < (wint*2+1)*(wint*2+1)): # not an integrate window
-                        D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/hwid # spatial distance
+                        D_D_cand = 1.0+np.power(np.square(i-x_cand)+np.square(j-y_cand),0.5)/opts.hwid # spatial distance
                     else:
                         D_D_cand = D_D_all[cnd_cand] # integrate window
                     C_D = (1.0-S_D_cand)*D_D_cand+0.0000001 # combined distance
@@ -270,7 +276,7 @@ for isub in range(n_sl):
                         fine_cand = np.hstack(((fine1[iband,aj:bj,ai:bi])[cnd_cand],(fine2[iband,aj:bj,ai:bi])[cnd_cand]))
                         coarse_cand = np.hstack(((coarse1[iband,aj:bj,ai:bi])[cnd_cand],(coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         coarse_change = abs(np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
-                        if (coarse_change >= dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
+                        if (coarse_change >= opts.dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
                             regress_result = sm.OLS(fine_cand,sm.add_constant(coarse_cand)).fit()
                             sig = 1.0-stats.f.pdf(regress_result.fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value
@@ -297,7 +303,7 @@ for isub in range(n_sl):
                         # the final prediction
                         fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
                         # revise the abnormal prediction
-                        if (fine0[iband,j,i] <= dn_min) or (fine0[iband,j,i] >= dn_max):
+                        if (fine0[iband,j,i] <= opts.dn_min) or (fine0[iband,j,i] >= opts.dn_max):
                             fine01 = np.sum(weight*(fine1[iband,aj:bj,ai:bi])[cnd_cand])
                             fine02 = np.sum(weight*(fine2[iband,aj:bj,ai:bi])[cnd_cand])
                             fine0[iband,j,i] = T_weight1*fine01+T_weight2*fine02
@@ -331,4 +337,4 @@ ds = None
 
 t1 = datetime.now()
 dt = (t1-t0).total_seconds()
-print('time used:', dt//3600,'h',np.mod(dt,3600)//60,'m',np.mod(dt,60),'s')
+print('time used: {:.0f} h {:.0f} m {:.1f} s'.format(dt/3600,np.mod(dt,3600)/60,np.mod(dt,60)))
