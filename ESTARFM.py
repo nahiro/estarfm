@@ -278,7 +278,7 @@ for isub in range(n_sl):
                         coarse_change = abs(np.nanmean((coarse1[iband,aj:bj,ai:bi])[cnd_cand])-np.nanmean((coarse2[iband,aj:bj,ai:bi])[cnd_cand]))
                         if (coarse_change >= opts.dn_max*0.02): # to ensure changes in coarse image large enough to obtain the conversion coefficient
                             regress_result = sm.OLS(fine_cand,sm.add_constant(coarse_cand)).fit()
-                            sig = 1.0-stats.f.pdf(regress_result.fvalue,1,number_cand*2-2)
+                            sig = 1.0-stats.f.cdf(regress_result.fvalue,1,number_cand*2-2)
                             # correct the result with no significancy or inconsistent change or too large value
                             if (sig <= 0.05) and (regress_result.params[1] > 0) and (regress_result.params[1] <= 5):
                                 V_cand = regress_result.params[1]
