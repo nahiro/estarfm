@@ -194,8 +194,8 @@ for isub in range(n_sl):
     similar_th = np.zeros((2,nb)) # compute the threshold of similar pixel seeking
 
     for iband in range(nb):
-        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/opts.num_class #pair 1
-        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/opts.num_class #pair 2
+        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/opts.num_class # pair 1
+        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/opts.num_class # pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
     a = np.arange(opts.hwid*2.0+1.0).reshape(-1,1)
