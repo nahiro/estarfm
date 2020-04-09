@@ -56,7 +56,7 @@ parser.add_option('-b','--background_f',default=BACKGROUND_F,type='float',help='
 parser.add_option('-B','--background_c',default=BACKGROUND_C,type='float',help='the value of background and missng pixels in coarse images (%default)')
 parser.add_option('-p','--patch_long',default=PATCH_LONG,type='int',help='set the size of each block,if process whole ETM scene, set 500-1000 (%default)')
 parser.add_option('--fine_fname',default=None,help='File name of output fine image (%default)')
-parser.add_option('--fine_dtype',default=None,help='Data type of output fine image (%default)')
+parser.add_option('--fine_dtype',default=None,help='Data type of output fine image, such as float32, uint16 (%default)')
 (opts,args) = parser.parse_args()
 if len(args) < 5:
     parser.print_help()
@@ -87,7 +87,10 @@ ds = None
 orig_ns = ns
 orig_nl = nl
 orig_nb = nb
-fine_dtype = data_f1.dtype
+if opts.fine_dtype is not None:
+    fine_dtype = np.dtype(opts.fine_dtype)
+else:
+    fine_dtype = data_f1.dtype
 n_ns = int(np.ceil(float(ns)/opts.patch_long)+0.1)
 n_nl = int(np.ceil(float(nl)/opts.patch_long)+0.1)
 n_sl = n_ns*n_nl
@@ -329,8 +332,22 @@ for isub in range(n_sl):
 
 #--------------------------------------------------------------------------------------
 # Output result
+if fine_dtype is np.dtype('int16'):
+    output_dtype = gdal.GDT_Int16
+elif fine_dtype is np.dtype('uint16'):
+    output_dtype = gdal.GDT_UInt16
+elif fine_dtype is np.dtype('int32'):
+    output_dtype = gdal.GDT_Int32
+elif fine_dtype is np.dtype('uint32'):
+    output_dtype = gdal.GDT_UInt32
+elif fine_dtype is np.dtype('float32'):
+    output_dtype = gdal.GDT_Float32
+elif fine_dtype is np.dtype('float64'):
+    output_dtype = gdal.GDT_Float64
+else:
+    raise ValueError('Error in data type >>> {}'.format(fine_dtype))
 driver = gdal.GetDriverByName("GTiff")
-ds = driver.Create(opts.fine_fname,orig_ns,orig_nl,orig_nb,gdal.GDT_Int16)
+ds = driver.Create(opts.fine_fname,orig_ns,orig_nl,orig_nb,output_dtype)
 ds.SetGeoTransform(fine_trans) # sets same geotransform as input
 ds.SetProjection(fine_proj) # sets same projection as input
 for iband in range(nb):
