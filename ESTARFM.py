@@ -25,6 +25,7 @@
 #---------------------------------------------------------------------------------
 
 import os
+import sys
 from datetime import datetime
 import gdal
 import numpy as np
@@ -194,8 +195,8 @@ for isub in range(n_sl):
     similar_th = np.zeros((2,nb)) # compute the threshold of similar pixel seeking
 
     for iband in range(nb):
-        similar_th[0,iband] = np.nanstd(fine1[iband,:,:])*2.0/opts.num_class # pair 1
-        similar_th[1,iband] = np.nanstd(fine2[iband,:,:])*2.0/opts.num_class # pair 2
+        similar_th[0,iband] = np.nanstd(fine1[iband,:,:],ddof=1)*2.0/opts.num_class # pair 1
+        similar_th[1,iband] = np.nanstd(fine2[iband,:,:],ddof=1)*2.0/opts.num_class # pair 2
 
     # compute the distance of each pixel in the window with the target pixel (integrate window)
     a = np.arange(opts.hwid*2.0+1.0).reshape(-1,1)
@@ -252,8 +253,8 @@ for isub in range(n_sl):
                         S_D_cand = 1.0-0.5*(abs((finecand[:,0]-coasecand[:,0])/(finecand[:,0]+coasecand[:,0]))+abs((finecand[:,1]-coasecand[:,1])/(finecand[:,1]+coasecand[:,1]))) # compute the correlation
                     else:
                         # for images with multiple bands
-                        sdx = np.nanstd(finecand,axis=1)
-                        sdy = np.nanstd(coasecand,axis=1)
+                        sdx = np.nanstd(finecand,ddof=1,axis=1)
+                        sdy = np.nanstd(coasecand,ddof=1,axis=1)
                         meanx = np.nanmean(finecand,axis=1)
                         meany = np.nanmean(coasecand,axis=1)
                         x_meanx = np.zeros((number_cand,nb*2))
