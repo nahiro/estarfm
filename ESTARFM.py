@@ -55,6 +55,8 @@ parser.add_option('-M','--dn_max',default=DN_MAX,type='float',help='set the rang
 parser.add_option('-b','--background_f',default=BACKGROUND_F,type='float',help='the value of background and missng pixels in fine images (%default)')
 parser.add_option('-B','--background_c',default=BACKGROUND_C,type='float',help='the value of background and missng pixels in coarse images (%default)')
 parser.add_option('-p','--patch_long',default=PATCH_LONG,type='int',help='set the size of each block,if process whole ETM scene, set 500-1000 (%default)')
+parser.add_option('--fine_fname',default=None,help='File name of output fine image (%default)')
+parser.add_option('--fine_dtype',default=None,help='Data type of output fine image (%default)')
 (opts,args) = parser.parse_args()
 if len(args) < 5:
     parser.print_help()
@@ -64,6 +66,8 @@ FileName2 = args[1]
 FileName3 = args[2]
 FileName4 = args[3]
 FileName5 = args[4]
+if opts.fine_fname is None:
+    opts.fine_fname = os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif'
 wint = int(opts.hwid+0.1)
 
 #-------------------------------------------------------------------
@@ -163,7 +167,7 @@ for isub in range(n_sl):
 #-------------------------------------------------------------------
 t0 = datetime.now() # the initial time of program running
 
-print('there are total',n_sl,' blocks')
+sys.stderr.write('there are total {} block(s)\n'.format(n_sl))
 
 mosic_f0 = np.full((nb,nl,ns),opts.background_f,dtype=fine_dtype)
 
@@ -321,12 +325,12 @@ for isub in range(n_sl):
 
     # mosiac the blended patch
     mosic_f0[:,ind_patch[2,isub]:ind_patch[3,isub],ind_patch[0,isub]:ind_patch[1,isub]] = fine0.astype(fine_dtype) # change the type of prediction into the type same as the input image
-    print('finished ',isub+1,' block')
+    sys.stderr.write('finished {} block\n'.format(isub+1))
 
 #--------------------------------------------------------------------------------------
 # Output result
 driver = gdal.GetDriverByName("GTiff")
-ds = driver.Create(os.path.splitext(os.path.basename(FileName5))[0]+'_ESTARFM.tif',orig_ns,orig_nl,orig_nb,gdal.GDT_Int16)
+ds = driver.Create(opts.fine_fname,orig_ns,orig_nl,orig_nb,gdal.GDT_Int16)
 ds.SetGeoTransform(fine_trans) # sets same geotransform as input
 ds.SetProjection(fine_proj) # sets same projection as input
 for iband in range(nb):
@@ -338,4 +342,4 @@ ds = None
 
 t1 = datetime.now()
 dt = (t1-t0).total_seconds()
-print('time used: {:.0f} h {:.0f} m {:.1f} s'.format(dt/3600,np.mod(dt,3600)/60,np.mod(dt,60)))
+sys.stderr.write('time used: {:.0f} h {:.0f} m {:.1f} s\n'.format(dt/3600,np.mod(dt,3600)/60,np.mod(dt,60)))
